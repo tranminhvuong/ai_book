@@ -111,8 +111,9 @@ aws lambda create-function \
   --code ImageUri=$FULL_IMAGE_URI \
   --role $ROLE_ARN \
   --region $AWS_REGION \
-  --timeout 10 \
-  --memory-size 128 \
+  --timeout 900 \
+  --memory-size 512 \
   --environment Variables={BUCKET_NAME=$BUCKET_NAME} || echo "Lambda already exists, consider updating it instead."
 
+rm lambda-basic-execution-policy.json trust-policy.json
 echo "Done. Lambda function '$LAMBDA_FUNCTION_NAME' created with image: $FULL_IMAGE_URI"
