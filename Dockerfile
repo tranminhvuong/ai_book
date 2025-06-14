@@ -15,7 +15,7 @@ RUN wget https://github.com/jgm/pandoc/releases/download/3.7.0.2/pandoc-3.7.0.2-
 # Set working directory
 WORKDIR ${LAMBDA_TASK_ROOT} 
 
-RUN yum install -y librsvg texlive xelatex latex
+RUN yum install -y librsvg texlive latex 
 
 # Copy package.json and install dependencies
 COPY package.json package-lock.json* ./

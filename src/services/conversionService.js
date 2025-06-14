@@ -1,15 +1,29 @@
-const pandoc = require('node-pandoc');
+const { spawn } = require('child_process');
 const markdownpdf = require("markdown-pdf");
 const fs = require('fs');
 
 // Function to convert markdown to DOCX
 async function convertMarkdownToDocx(markdown, outputPath) {
   return new Promise((resolve, reject) => {
-    const args = `-f markdown -t docx -o ${outputPath} --highlight-style=tango --standalone`;
-    pandoc(markdown, args, (err, result) => {
-      if (err) {
-        console.error('Pandoc DOCX conversion error:', err);
-        reject(err);
+    const tmpInputPath = '/tmp/input-docx.md';
+    fs.writeFileSync(tmpInputPath, markdown);
+    const args = [
+      '-f', 'markdown',
+      '-t', 'docx',
+      '-o', outputPath,
+      '--highlight-style=tango',
+      '--standalone',
+      tmpInputPath
+    ];
+    const pandoc = spawn('pandoc', args);
+    pandoc.on('error', (err) => {
+      console.error('Pandoc DOCX conversion error:', err);
+      reject(err);
+    });
+    pandoc.on('close', (code) => {
+      fs.unlinkSync(tmpInputPath);
+      if (code !== 0) {
+        reject(new Error(`Pandoc exited with code ${code}`));
       } else {
         try {
           if (!fs.existsSync(outputPath)) {
@@ -55,18 +69,13 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
 
       // Construct metadata arguments
       const metadataArgs = [
-        `--metadata=title:"${finalMetadata.title}"`,
-        `--metadata=author:"${finalMetadata.author}"`,
-        `--metadata=date:"${finalMetadata.date}"`
+        `--metadata title='${finalMetadata.title}'`,
+        `--metadata author='${finalMetadata.author}'`,
+        `--metadata date='${finalMetadata.date}'`
       ].join(' ');
 
       console.log('PDF conversion metadata:', finalMetadata);
       console.log('PDF conversion output path:', outputPath);
-
-      // Using wkhtmltopdf engine for PDF generation
-      const args = `-f markdown -t pdf --pdf-engine=xelatex --highlight-style=tango --standalone -o ${outputPath} ${metadataArgs}`;
-      
-      console.log('Converting to PDF with arguments:', args);
       
       markdownpdf().from.string(markdown)
         .to(outputPath, async (err) => {
@@ -97,34 +106,6 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
             }
         }
       });
-      // pandoc(markdown, args, async (err, result) => {
-      //   if (err) {
-      //     console.error('Pandoc PDF conversion error details:', {
-      //       error: err.toString(),
-      //       message: err.message,
-      //       stack: err.stack
-      //     });
-      //     reject(err);
-      //   } else {
-      //     try {
-      //       // Wait for the file to be generated
-      //       const fileExists = await waitForFile(outputPath);
-      //       if (!fileExists) {
-      //         throw new Error(`Output file not found after waiting: ${outputPath}`);
-      //       }
-
-      //       // Add a small delay to ensure file is completely written
-      //       await new Promise(resolve => setTimeout(resolve, 1000));
-
-      //       const buffer = fs.readFileSync(outputPath);
-      //       fs.unlinkSync(outputPath);
-      //       resolve(buffer);
-      //     } catch (error) {
-      //       console.error('Error reading PDF file:', error);
-      //       reject(error);
-      //     }
-      //   }
-      // });
     } catch (error) {
       console.error('Error in PDF conversion:', error);
       reject(new Error(`PDF conversion failed: ${error.message}`));
@@ -136,42 +117,45 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
 async function convertMarkdownToHtml(markdown, outputPath, metadata = {}) {
   return new Promise((resolve, reject) => {
     try {
-      // Default metadata
       const defaultMetadata = {
         title: 'Converted Document',
         author: 'Markdown Converter',
         date: new Date().toISOString(),
         css: 'https://cdn.jsdelivr.net/npm/water.css@2/out/water.css'
       };
-
-      // Merge provided metadata with defaults
       const finalMetadata = { ...defaultMetadata, ...metadata };
-
-      // Construct metadata arguments
       const metadataArgs = [
-        `--metadata=title:"${finalMetadata.title}"`,
-        `--metadata=author:"${finalMetadata.author}"`,
-        `--metadata=date:"${finalMetadata.date}"`,
-        `--css="${finalMetadata.css}"`
-      ].join(' ');
-
-      console.log('HTML conversion metadata:', finalMetadata);
-
-      const args = `-f markdown -t html --highlight-style=tango --standalone -o ${outputPath} ${metadataArgs}`;
-      
-      console.log('Converting to HTML with arguments:', args);
-      
-      pandoc(markdown, args, async (err, result) => {
-        if (err && !err.message.includes('WARNING')) {
-          console.error('Pandoc HTML conversion error:', err);
-          reject(err);
+        `--metadata=title:${finalMetadata.title}`,
+        `--metadata=author:${finalMetadata.author}`,
+        `--metadata=date:${finalMetadata.date}`,
+        `--css=${finalMetadata.css}`
+      ];
+      const tmpInputPath = '/tmp/input-html.md';
+      fs.writeFileSync(tmpInputPath, markdown);
+      const args = [
+        '-f', 'markdown',
+        '-t', 'html',
+        '--highlight-style=tango',
+        '--standalone',
+        '-o', outputPath,
+        ...metadataArgs,
+        tmpInputPath
+      ];
+      const pandoc = spawn('pandoc', args);
+      pandoc.on('error', (err) => {
+        console.error('Pandoc HTML conversion error:', err);
+        reject(err);
+      });
+      pandoc.on('close', async (code) => {
+        fs.unlinkSync(tmpInputPath);
+        if (code !== 0) {
+          reject(new Error(`Pandoc exited with code ${code}`));
         } else {
           try {
             const fileExists = await waitForFile(outputPath);
             if (!fileExists) {
               throw new Error(`Output file not found after waiting: ${outputPath}`);
             }
-
             const buffer = fs.readFileSync(outputPath);
             fs.unlinkSync(outputPath);
             resolve(buffer);
@@ -197,36 +181,39 @@ async function convertMarkdownToEpub(markdown, outputPath, metadata = {}) {
         author: 'Author',
         language: 'en'
       };
-
       const finalMetadata = { ...defaultMetadata, ...metadata };
       const metadataArgs = [
-        `--metadata=title:"${finalMetadata.title}"`,
-        `--metadata=author:"${finalMetadata.author}"`
-      ].join(' ');
-
-      console.log('Metadata arguments:', metadataArgs);
-      console.log('Output path:', outputPath);
-
-      const args = `-f markdown -t epub2 ${metadataArgs} --highlight-style=tango --standalone -o ${outputPath}`;
-      
-      console.log('Converting to EPUB with arguments:', args);
-      
-      pandoc(markdown, args, (err, result) => {
-        if (err) {
-          console.error('Pandoc EPUB conversion error:', err);
-          reject(new Error(`EPUB conversion failed: ${err.message}`));
-        } else {
-          try {
-            if (!fs.existsSync(outputPath)) {
-              throw new Error(`Output file not found: ${outputPath}`);
-            }
-            const buffer = fs.readFileSync(outputPath);
-            fs.unlinkSync(outputPath);
-            resolve(buffer);
-          } catch (error) {
-            console.error('Error reading EPUB file:', error);
-            reject(error);
+        `--metadata=title:${finalMetadata.title}`,
+        `--metadata=author:${finalMetadata.author}`
+      ];
+      const tmpInputPath = '/tmp/input-epub.md';
+      fs.writeFileSync(tmpInputPath, markdown);
+      const args = [
+        '-f', 'markdown',
+        '-t', 'epub2',
+        ...metadataArgs,
+        '--highlight-style=tango',
+        '--standalone',
+        '-o', outputPath,
+        tmpInputPath
+      ];
+      const pandoc = spawn('pandoc', args);
+      pandoc.on('error', (err) => {
+        console.error('Pandoc EPUB conversion error:', err);
+        reject(new Error(`EPUB conversion failed: ${err.message}`));
+      });
+      pandoc.on('close', () => {
+        fs.unlinkSync(tmpInputPath);
+        try {
+          if (!fs.existsSync(outputPath)) {
+            throw new Error(`Output file not found: ${outputPath}`);
           }
+          const buffer = fs.readFileSync(outputPath);
+          fs.unlinkSync(outputPath);
+          resolve(buffer);
+        } catch (error) {
+          console.error('Error reading EPUB file:', error);
+          reject(error);
         }
       });
     } catch (error) {
