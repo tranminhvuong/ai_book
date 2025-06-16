@@ -1,5 +1,7 @@
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const fs = require('fs');
+const crypto = require('crypto');
 
 // Initialize S3 client
 const s3Client = new S3Client({
@@ -17,6 +19,32 @@ async function readMarkdownFromS3(bucketName, key) {
     const response = await s3Client.send(command);
     const markdown = await response.Body.transformToString();
     return markdown;
+  } catch (error) {
+    console.error('Error reading from S3:', error);
+    throw error;
+  }
+}
+
+async function readImageFromS3(bucketName, key) {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key
+    });
+    const response = await s3Client.send(command);
+
+    // Đọc dữ liệu binary từ response.Body
+    const chunks = [];
+    for await (const chunk of response.Body) {
+      chunks.push(chunk);
+    }
+    const imageBuffer = Buffer.concat(chunks);
+
+    const md5 = crypto.createHash('md5').update(imageBuffer).digest('hex');
+    const imagePath = `/tmp/${md5}.png`;
+    fs.writeFileSync(imagePath, imageBuffer);
+
+    return imagePath;
   } catch (error) {
     console.error('Error reading from S3:', error);
     throw error;
@@ -60,5 +88,6 @@ async function generatePresignedUrl(bucketName, key, expiresIn = 3600) {
 module.exports = {
   readMarkdownFromS3,
   uploadToS3,
-  generatePresignedUrl
+  generatePresignedUrl,
+  readImageFromS3
 };

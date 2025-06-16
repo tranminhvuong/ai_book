@@ -3,10 +3,16 @@ const markdownpdf = require("markdown-pdf");
 const fs = require('fs');
 
 // Function to convert markdown to DOCX
-async function convertMarkdownToDocx(markdown, outputPath) {
+async function convertMarkdownToDocx(markdown, outputPath, coverImagePath) {
   return new Promise((resolve, reject) => {
+    let markdownWithCover = '';
+    if (coverImagePath) {
+      markdownWithCover = `![cover](${coverImagePath})\n\n\\newpage\n\n` + markdown;
+    } else {
+      markdownWithCover = markdown;
+    }
     const tmpInputPath = '/tmp/input-docx.md';
-    fs.writeFileSync(tmpInputPath, markdown);
+    fs.writeFileSync(tmpInputPath, markdownWithCover);
     const args = [
       '-f', 'markdown',
       '-t', 'docx',
@@ -54,7 +60,7 @@ async function waitForFile(filePath, maxRetries = 10, interval = 1000) {
 }
 
 // Function to convert markdown to PDF
-async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
+async function convertMarkdownToPdf(markdown, outputPath, metadata = {}, coverImagePath) {
   return new Promise((resolve, reject) => {
     try {
       // Default metadata
@@ -76,8 +82,15 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
 
       console.log('PDF conversion metadata:', finalMetadata);
       console.log('PDF conversion output path:', outputPath);
+
+      let markdownWithCover = '';
+      if (coverImagePath) {
+        markdownWithCover = `![cover](${coverImagePath})\n\n\n\n\n` + markdown;
+      } else {
+        markdownWithCover = markdown;
+      }
       
-      markdownpdf().from.string(markdown)
+      markdownpdf().from.string(markdownWithCover)
         .to(outputPath, async (err) => {
           if (err) {
             console.error('PDF conversion error details:', {
@@ -88,15 +101,6 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
             reject(err);
           } else {
             try {
-              // Wait for the file to be generated
-              const fileExists = await waitForFile(outputPath);
-              if (!fileExists) {
-                throw new Error(`Output file not found after waiting: ${outputPath}`);
-              }
-
-              // Add a small delay to ensure file is completely written
-              await new Promise(resolve => setTimeout(resolve, 1000));
-
               const buffer = fs.readFileSync(outputPath);
               fs.unlinkSync(outputPath);
               resolve(buffer);
@@ -114,7 +118,7 @@ async function convertMarkdownToPdf(markdown, outputPath, metadata = {}) {
 }
 
 // Function to convert markdown to HTML
-async function convertMarkdownToHtml(markdown, outputPath, metadata = {}) {
+async function convertMarkdownToHtml(markdown, outputPath, metadata = {}, coverImagePath) {
   return new Promise((resolve, reject) => {
     try {
       const defaultMetadata = {
@@ -131,12 +135,20 @@ async function convertMarkdownToHtml(markdown, outputPath, metadata = {}) {
         `--css=${finalMetadata.css}`
       ];
       const tmpInputPath = '/tmp/input-html.md';
-      fs.writeFileSync(tmpInputPath, markdown);
+      let markdownWithCover = '';
+      if (coverImagePath) {
+        markdownWithCover = `![](${coverImagePath})\n\n\\newpage\n\n` + markdown;
+      } else {
+        markdownWithCover = markdown;
+      }
+      fs.writeFileSync(tmpInputPath, markdownWithCover);
       const args = [
         '-f', 'markdown',
         '-t', 'html',
         '--highlight-style=tango',
+        '--self-contained',
         '--standalone',
+        coverImagePath ? `--epub-cover-image=${coverImagePath}` : '',
         '-o', outputPath,
         ...metadataArgs,
         tmpInputPath
@@ -173,7 +185,7 @@ async function convertMarkdownToHtml(markdown, outputPath, metadata = {}) {
 }
 
 // Function to convert markdown to EPUB
-async function convertMarkdownToEpub(markdown, outputPath, metadata = {}) {
+async function convertMarkdownToEpub(markdown, outputPath, metadata = {}, coverImagePath) {
   return new Promise((resolve, reject) => {
     try {
       const defaultMetadata = {
@@ -194,9 +206,12 @@ async function convertMarkdownToEpub(markdown, outputPath, metadata = {}) {
         ...metadataArgs,
         '--highlight-style=tango',
         '--standalone',
+        coverImagePath ? `--epub-cover-image=${coverImagePath}` : '',
         '-o', outputPath,
         tmpInputPath
       ];
+      console.log('EPUB conversion metadata:', args);
+      
       const pandoc = spawn('pandoc', args);
       pandoc.on('error', (err) => {
         console.error('Pandoc EPUB conversion error:', err);

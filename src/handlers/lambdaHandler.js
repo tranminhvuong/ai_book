@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { readMarkdownFromS3, uploadToS3, generatePresignedUrl } = require('../services/s3Service');
+const { readImageFromS3, readMarkdownFromS3, uploadToS3, generatePresignedUrl } = require('../services/s3Service');
 const {
   convertMarkdownToDocx,
   convertMarkdownToPdf,
@@ -19,6 +19,7 @@ exports.handler = async (event) => {
       sourceKey = process.env.S3_MARKDOWN_KEY,
       outputFormat = 'docx',
       outputBucket = process.env.BUCKET_NAME,
+      coverImageKey,
       outputKey = `output/${outputFormat}/${sourceKey.split('/').pop().split('.')[0]}.${outputFormat}`,
       metadata = {}
     } = event;
@@ -27,6 +28,7 @@ exports.handler = async (event) => {
     if (!sourceBucket || !sourceKey) {
       throw new Error('Missing required parameters: sourceBucket and sourceKey');
     }
+    let coverImagePath = coverImageKey ? await readImageFromS3(sourceBucket, coverImageKey): null;
 
     // Read markdown from S3
     console.log(`Reading markdown from s3://${sourceBucket}/${sourceKey}`);
@@ -47,20 +49,20 @@ exports.handler = async (event) => {
 
     switch (outputFormat.toLowerCase()) {
       case 'pdf':
-        convertedContent = await convertMarkdownToPdf(markdown, '/tmp/output.pdf', metadata);
+        convertedContent = await convertMarkdownToPdf(markdown, '/tmp/output.pdf', metadata, coverImagePath);
         contentType = 'application/pdf';
         break;
       case 'html':
-        convertedContent = await convertMarkdownToHtml(markdown, '/tmp/output.html', metadata);
+        convertedContent = await convertMarkdownToHtml(markdown, '/tmp/output.html', metadata, coverImagePath);
         contentType = 'text/html';
         break;
       case 'epub':
-        convertedContent = await convertMarkdownToEpub(markdown, '/tmp/output.epub', metadata);
+        convertedContent = await convertMarkdownToEpub(markdown, '/tmp/output.epub', metadata, coverImagePath);
         contentType = 'application/epub+zip';
         break;
       case 'docx':
       default:
-        convertedContent = await convertMarkdownToDocx(markdown, '/tmp/output.docx');
+        convertedContent = await convertMarkdownToDocx(markdown, '/tmp/output.docx', coverImagePath);
         contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         break;
     }
