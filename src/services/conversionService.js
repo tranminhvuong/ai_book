@@ -19,6 +19,7 @@ async function convertMarkdownToDocx(markdown, outputPath, coverImagePath) {
       '-o', outputPath,
       '--highlight-style=tango',
       '--standalone',
+      '--self-contained',
       '--reference-doc=reference.docx',
       tmpInputPath
     ];
