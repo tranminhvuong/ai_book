@@ -112,12 +112,14 @@ if aws lambda get-function --profile $PROFILE --function-name $LAMBDA_FUNCTION_N
         --image-uri $FULL_IMAGE_URI \
         --region $AWS_REGION
 
+    sleep 60
+
     echo "Updating function configuration..."
     aws lambda update-function-configuration \
         --profile $PROFILE \
         --function-name $LAMBDA_FUNCTION_NAME \
         --timeout 900 \
-        --memory-size 512 \
+        --memory-size 1024 \
         --environment Variables={BUCKET_NAME=$BUCKET_NAME} \
         --region $AWS_REGION
 else

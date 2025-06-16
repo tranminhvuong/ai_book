@@ -1,5 +1,4 @@
 const { spawn } = require('child_process');
-const markdownpdf = require("markdown-pdf");
 const fs = require('fs');
 
 // Function to convert markdown to DOCX
@@ -64,58 +63,67 @@ async function waitForFile(filePath, maxRetries = 10, interval = 1000) {
 // Function to convert markdown to PDF
 async function convertMarkdownToPdf(markdown, outputPath, metadata = {}, coverImagePath) {
   return new Promise((resolve, reject) => {
-    try {
-      // Default metadata
-      const defaultMetadata = {
-        title: 'Converted Document',
-        author: 'Markdown Converter',
-        date: new Date().toISOString()
-      };
+    // Default metadata
+    const defaultMetadata = {
+      title: 'Converted Document',
+      author: 'Markdown Converter',
+      date: new Date().toISOString()
+    };
 
-      // Merge provided metadata with defaults
-      const finalMetadata = { ...defaultMetadata, ...metadata };
+    // Merge provided metadata with defaults
+    const finalMetadata = { ...defaultMetadata, ...metadata };
 
-      // Construct metadata arguments
-      const metadataArgs = [
-        `--metadata title='${finalMetadata.title}'`,
-        `--metadata author='${finalMetadata.author}'`,
-        `--metadata date='${finalMetadata.date}'`
-      ].join(' ');
+    // Construct metadata arguments
+    const metadataArgs = [
+      `--metadata title='${finalMetadata.title}'`,
+      `--metadata author='${finalMetadata.author}'`,
+      `--metadata date='${finalMetadata.date}'`
+    ].join(' ');
 
-      console.log('PDF conversion metadata:', finalMetadata);
-      console.log('PDF conversion output path:', outputPath);
+    console.log('PDF conversion metadata:', finalMetadata);
+    console.log('PDF conversion output path:', outputPath);
 
-      let markdownWithCover = '';
-      if (coverImagePath) {
-        markdownWithCover = `![cover](${coverImagePath})\n\n\n\n\n` + markdown;
-      } else {
-        markdownWithCover = markdown;
-      }
-      
-      markdownpdf().from.string(markdownWithCover)
-        .to(outputPath, async (err) => {
-          if (err) {
-            console.error('PDF conversion error details:', {
-              error: err.toString(),
-              message: err.message,
-              stack: err.stack
-            });
-            reject(err);
-          } else {
-            try {
-              const buffer = fs.readFileSync(outputPath);
-              fs.unlinkSync(outputPath);
-              resolve(buffer);
-            } catch (error) {
-              console.error('Error reading PDF file:', error);
-              reject(error);
-            }
-        }
-      });
-    } catch (error) {
-      console.error('Error in PDF conversion:', error);
-      reject(new Error(`PDF conversion failed: ${error.message}`));
+    let markdownWithCover = '';
+    if (coverImagePath) {
+      markdownWithCover = `![](${coverImagePath})\n\n` + markdown;
+    } else {
+      markdownWithCover = markdown;
     }
+    
+    const tmpInputPath = '/tmp/input-pdf.md';
+    fs.writeFileSync(tmpInputPath, markdownWithCover);
+    const args = [
+      '-f', 'markdown',
+      '-t', 'pdf',
+      '--pdf-engine=xelatex',
+      '-o', outputPath,
+      '--highlight-style=tango',
+      '--standalone',
+      tmpInputPath
+    ];
+    const pandoc = spawn('pandoc', args);
+    pandoc.on('error', (err) => {
+      console.error('Pandoc DOCX conversion error:', err);
+      reject(err);
+    });
+    pandoc.on('close', (code) => {
+      fs.unlinkSync(tmpInputPath);
+      if (code !== 0) {
+        reject(new Error(`Pandoc exited with code ${code}`));
+      } else {
+        try {
+          if (!fs.existsSync(outputPath)) {
+            throw new Error(`Output file not found: ${outputPath}`);
+          }
+          const buffer = fs.readFileSync(outputPath);
+          fs.unlinkSync(outputPath);
+          resolve(buffer);
+        } catch (error) {
+          console.error('Error reading PDF file:', error);
+          reject(error);
+        }
+      }
+    });
   });
 }
 
