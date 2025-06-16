@@ -7,7 +7,7 @@ async function convertMarkdownToDocx(markdown, outputPath, coverImagePath) {
   return new Promise((resolve, reject) => {
     let markdownWithCover = '';
     if (coverImagePath) {
-      markdownWithCover = `![cover](${coverImagePath})\n\n\\newpage\n\n` + markdown;
+      markdownWithCover = `![](${coverImagePath})\n\n\\newpage\n\n` + markdown;
     } else {
       markdownWithCover = markdown;
     }
@@ -19,6 +19,7 @@ async function convertMarkdownToDocx(markdown, outputPath, coverImagePath) {
       '-o', outputPath,
       '--highlight-style=tango',
       '--standalone',
+      '--reference-doc=reference.docx',
       tmpInputPath
     ];
     const pandoc = spawn('pandoc', args);

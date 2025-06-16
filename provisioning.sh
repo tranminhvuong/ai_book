@@ -103,17 +103,36 @@ aws iam attach-role-policy \
 
 ROLE_ARN=$(aws iam get-role --profile $PROFILE --role-name $ROLE_NAME --query 'Role.Arn' --output text)
 
-echo "Creating Lambda function..."
-aws lambda create-function \
-  --profile $PROFILE \
-  --function-name $LAMBDA_FUNCTION_NAME \
-  --package-type Image \
-  --code ImageUri=$FULL_IMAGE_URI \
-  --role $ROLE_ARN \
-  --region $AWS_REGION \
-  --timeout 900 \
-  --memory-size 512 \
-  --environment Variables={BUCKET_NAME=$BUCKET_NAME} || echo "Lambda already exists, consider updating it instead."
+echo "Creating or updating Lambda function..."
+if aws lambda get-function --profile $PROFILE --function-name $LAMBDA_FUNCTION_NAME --region $AWS_REGION >/dev/null 2>&1; then
+    echo "Function exists, updating code..."
+    aws lambda update-function-code \
+        --profile $PROFILE \
+        --function-name $LAMBDA_FUNCTION_NAME \
+        --image-uri $FULL_IMAGE_URI \
+        --region $AWS_REGION
+
+    echo "Updating function configuration..."
+    aws lambda update-function-configuration \
+        --profile $PROFILE \
+        --function-name $LAMBDA_FUNCTION_NAME \
+        --timeout 900 \
+        --memory-size 512 \
+        --environment Variables={BUCKET_NAME=$BUCKET_NAME} \
+        --region $AWS_REGION
+else
+    echo "Creating new function..."
+    aws lambda create-function \
+        --profile $PROFILE \
+        --function-name $LAMBDA_FUNCTION_NAME \
+        --package-type Image \
+        --code ImageUri=$FULL_IMAGE_URI \
+        --role $ROLE_ARN \
+        --region $AWS_REGION \
+        --timeout 900 \
+        --memory-size 512 \
+        --environment Variables={BUCKET_NAME=$BUCKET_NAME}
+fi
 
 rm lambda-basic-execution-policy.json trust-policy.json
 echo "Done. Lambda function '$LAMBDA_FUNCTION_NAME' created with image: $FULL_IMAGE_URI"
